@@ -1,4 +1,3 @@
-# CameraControlsSPBCfinal
 <!DOCTYPE html>
 <html>
 
