@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Companion Control</title>
+</head>
+<body>
+  <h1>Trigger Companion from Webpage</h1>
+  <button onclick="triggerCompanion()">Press Bank 1 / Button 2</button>
+
+  <script>
+    function triggerCompanion() {
+      fetch("http://192.168.1.131:8000/api/location/1/0/2/press", {
+        method: "POST",
+        mode: "no-cors" // prevents CORS blocking in browser
+      }).catch(err => console.error(err));
+    }
+  </script>
+</body>
+</html>

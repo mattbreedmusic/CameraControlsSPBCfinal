@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Church Walk</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  <style>
+    body { margin:0; background:#000; }
+    canvas { image-rendering: pixelated; display:block; margin: 0 auto; }
+    #modal {
+      position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+      background:#fff; padding:16px; border-radius:8px; display:none; max-width:90vw;
+      box-shadow:0 6px 20px rgba(0,0,0,0.5);
+    }
+    #modal img{ max-width:80vw; height:auto; display:block; margin-bottom:8px; }
+    #modal button{ padding:8px 12px; }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="modal"></div>
+
+<script>
+const config = {
+  type: Phaser.AUTO,
+  width: 800,
+  height: 600,
+  parent: 'game',
+  pixelArt: true,
+  physics: { default: 'arcade', arcade: { debug: false } },
+  scene: { preload, create, update }
+};
+const game = new Phaser.Game(config);
+
+let cursors, player, hotspotsGroup;
+
+function preload() {
+  // Replace these with your exported assets
+  this.load.image('tiles', 'assets/tiles.png');
+  this.load.tilemapTiledJSON('map', 'assets/map.json');
+  this.load.spritesheet('hero', 'assets/hero.png', { frameWidth: 16, frameHeight: 24 });
+}
+
+function create() {
+  const map = this.make.tilemap({ key: 'map' });
+  const tileset = map.addTilesetImage('tilesetNameInTiled', 'tiles'); // name must match Tiled tileset name
+  map.createLayer('Below', tileset, 0, 0);
+  const worldLayer = map.createLayer('World', tileset, 0, 0);
+  worldLayer.setCollisionByProperty({ collides: true });
+
+  // spawn point object in Tiled named "Spawn"
+  const spawnPoint = map.findObject('Objects', obj => obj.name === 'Spawn') || {x:32,y:32};
+
+  player = this.physics.add.sprite(spawnPoint.x, spawnPoint.y, 'hero', 0);
+  player.setSize(12, 18).setOffset(2, 6);
+  player.setCollideWorldBounds(true);
+
+  this.physics.add.collider(player, worldLayer);
+
+  // cursors
+  cursors = this.input.keyboard.createCursorKeys();
+
+  // Create hotspots from object layer named "Hotspots"
+  hotspotsGroup = this.physics.add.staticGroup();
+  const objs = map.getObjectLayer('Hotspots')?.objects || [];
+  objs.forEach(o => {
+    // create an invisible rectangle at the object's position
+    const zx = o.x + (o.width || 0)/2;
+    const zy = o.y - (o.height || 0)/2;
+    const zone = this.add.zone(zx, zy, o.width || 16, o.height || 16).setOrigin(0.5);
+    this.physics.add.existing(zone, true);
+    zone.properties = {};
+    (o.properties || []).forEach(p => zone.properties[p.name] = p.value);
+    hotspotsGroup.add(zone);
+  });
+
+  this.physics.add.overlap(player, hotspotsGroup, onHotspot, null, this);
+}
+
+function onHotspot(player, zone) {
+  // avoid spamming the same hotspot
+  if(zone._triggered) return;
+  zone._triggered = true;
+
+  const props = zone.properties || {};
+  // show a simple modal
+  const modal = document.getElementById('modal');
+  let html = '';
+  if(props.type === 'verse') html += `<h3>Verse</h3><p>${props.text || 'A favourite verse'}</p>`;
+  if(props.type === 'image') html += `<img src="${props.src || 'assets/placeholder.jpg'}" alt="Image">`;
+  if(props.type === 'coffee') html += `<h3>Free Coffee!</h3><p>Tap to claim a one-time coupon.</p><button id="claim">Claim</button>`;
+  html += `<div style="text-align:right;"><button id="closeBtn">Close</button></div>`;
+  modal.innerHTML = html;
+  modal.style.display = 'block';
+  document.getElementById('closeBtn').onclick = () => { modal.style.display = 'none'; };
+
+  const claimBtn = document.getElementById('claim');
+  if(claimBtn) claimBtn.onclick = async () => {
+    // example: call your serverless function to create a coupon
+    try {
+      claimBtn.disabled = true;
+      claimBtn.textContent = 'Generating...';
+      // const resp = await fetch('/.netlify/functions/generateCoupon', {method:'POST'});
+      // const data = await resp.json();
+      // alert('Your coupon: ' + data.code);
+      // For demo without backend:
+      const code = Math.random().toString(36).slice(2,8).toUpperCase();
+      alert('Demo coupon: ' + code + '\n(Implement serverless function for secured codes.)');
+      claimBtn.textContent = 'Claimed';
+    } catch (e) {
+      alert('Error generating coupon');
+      claimBtn.disabled = false;
+      claimBtn.textContent = 'Claim';
+    }
+  };
+}
+
+function update() {
+  const speed = 120;
+  const prevVelocity = player.body.velocity.clone();
+  player.body.setVelocity(0);
+
+  if (cursors.left.isDown) player.body.setVelocityX(-speed);
+  else if (cursors.right.isDown) player.body.setVelocityX(speed);
+  if (cursors.up.isDown) player.body.setVelocityY(-speed);
+  else if (cursors.down.isDown) player.body.setVelocityY(speed);
+
+  // normalize and scale the velocity so player can't move faster diagonally
+  player.body.velocity.normalize().scale(speed);
+}
+</script>
+</body>
+</html>

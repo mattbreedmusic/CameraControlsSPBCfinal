@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Custom Companion Stream Deck</title>
+  <style>
+    body {
+      background: #08EA9F;
+background: linear-gradient(90deg, rgba(8, 234, 159, 1) 0%, rgba(7, 163, 220, 1) 100%);
+      font-family: montserrat, classic;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+    h1 {
+      text-align: center;
+      font-size: 30px;
+      background-color: #000000;
+      color: #9c9c9c;
+      margin: 0% 0;
+      font-weight: bold;
+      padding: 10px;
+
+    }
+    table {
+      border-collapse: collapse;
+      margin: auto;
+      height: calc(100vh - 80px);
+      width: 100vw;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 0px solid black;
+      text-align: center;
+      vertical-align: middle;
+      padding: 1px;
+    }
+    td {
+      background-color: #222;
+    }
+    th {
+      background: rgba(0,0,0,0.0);
+      font-size: 30px;
+      padding: 5px;
+    }
+    .row-label {
+      background: rgba(0,0,0,0.0);
+      font-size: 30px;
+      width: 100px;
+    }
+    .button {
+      width: 48%;
+      height: 48%;
+      font-size: 14px;
+      border: none;
+      outline: none;
+      color: white;
+      cursor: pointer;
+      background: #444;
+      margin: 1%;
+    }
+    .button-stack {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      height: 100%;
+      width: 100%;
+    }
+    .edit-button {
+      width: 100%;
+      height: 100%;
+      font-size: 30px;
+      border: none;
+      outline: none;
+      color: white;
+      cursor: pointer;
+      background: rgba(0,0,0,0.5);
+      font-weight: bold;
+      margin: 2px 0;
+    }
+    .goLive-button {
+      background: #5cb85c;
+    }
+    #editPanel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 500px;
+      height: 100%;
+    background: rgba(32,32,32,0.7);
+      backdrop-filter: blur(2px);
+      color: white;
+      transform: translateX(100%);
+      transition: transform 0.4s ease;
+      padding: 30px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+    }
+    #editPanel.open {
+      display: block;
+      transform: translateX(0);
+    }
+    #editPanel h2 { margin-top: 0; }
+    .edit-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(3, 100px);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .edit-grid button {
+      background: #555;
+      border: none;
+      color: white;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .close-btn {
+      margin-top: 20px;
+      padding: 12px;
+      width: 100%;
+      font-size: 16px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #goLiveModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.7);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+    }
+    #goLiveModalContent {
+      background: #222;
+      padding: 30px;
+      border-radius: 10px;
+      text-align: center;
+      min-width: 300px;
+    }
+    #goLiveModalContent button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
+    #goLiveModalContent .yes-btn { background: #5cb85c; color: white; }
+    #goLiveModalContent .no-btn { background: #f44336; color: white; }
+  </style>
+</head>
+<body>
+  <h1>Soul Food Cameras</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        <th>PTZ1</th>
+        <th>PTZ2</th>
+        <th>PTZ3</th>
+      </tr>
+    </thead>
+    <tbody id="buttonGrid"></tbody>
+  </table>
+
+  <div id="editPanel">
+    <h2 id="editTitle">Edit Mode</h2>
+    <div class="edit-grid" id="editGrid"></div>
+    <button class="close-btn" onclick="closeEditPanel()">Close</button>
+  </div>
+
+  <div id="goLiveModal">
+    <div id="goLiveModalContent">
+      <h2>Are you sure?</h2>
+      <button class="yes-btn" onclick="confirmGoLive()">Yes</button>
+      <button class="no-btn" onclick="closeGoLiveModal()">No</button>
+    </div>
+  </div>
+
+  <script>
+    const companionHost = "ws://192.168.1.16:16623";
+    const columnLabels = ["PTZ1", "PTZ2", "PTZ3"];
+    const rowLabels = ["Lectern", "WL", "CO-WL", "Drummer", "Wide", "Other"];
+    
+    const placeholderNames = [
+      ["Lec Btn1", "Lec Btn2"],
+      ["WL Btn1", "WL Btn2"],
+      ["CoWL Btn1", "CoWL Btn2"],
+      ["Drum Btn1", "Drum Btn2"],
+      ["Wide Btn1", "Wide Btn2"],
+      ["Other Btn1", "Other Btn2"]
+    ];
+
+    const grid = document.getElementById("buttonGrid");
+
+    rowLabels.forEach((rowLabel, row) => {
+      const tr = document.createElement("tr");
+      const th = document.createElement("th");
+      th.className = "row-label";
+      th.innerText = rowLabel;
+      tr.appendChild(th);
+
+      columnLabels.forEach((colIdx) => {
+        const td = document.createElement("td");
+        const stack = document.createElement("div");
+        stack.className = "button-stack";
+
+        if (row === 0 && colIdx === 0) {
+          const btnA = document.createElement("button");
+          btnA.className = "button";
+          btnA.dataset.page = 10;
+          btnA.dataset.bank = 2;
+          btnA.onclick = () => pressButton(10, 2);
+          stack.appendChild(btnA);
+
+          const btnB = document.createElement("button");
+          btnB.className = "button";
+          btnB.dataset.page = 10;
+          btnB.dataset.bank = 10;
+          btnB.onclick = () => pressButton(10, 10);
+          stack.appendChild(btnB);
+        } else {
+          for (let i = 0; i < 2; i++) {
+            const btn = document.createElement("button");
+            btn.className = "button";
+            btn.innerText = placeholderNames[row][i] || "—";
+            stack.appendChild(btn);
+          }
+        }
+
+        td.appendChild(stack);
+        tr.appendChild(td);
+      });
+
+      const rightTd = document.createElement("td");
+      if (row < 3) {
+        const editBtn = document.createElement("button");
+        editBtn.className = "edit-button";
+        editBtn.innerText = columnLabels[row] + " Edit";
+        editBtn.onclick = () => openEditPanel(columnLabels[row]);
+        rightTd.appendChild(editBtn);
+      } else if (row === 3) {
+        const goLiveBtn = document.createElement("button");
+        goLiveBtn.className = "edit-button goLive-button";
+        goLiveBtn.innerText = "Go Live!";
+        goLiveBtn.onclick = () => openGoLiveModal();
+        rightTd.appendChild(goLiveBtn);
+      } else if (row === 4) {
+        const slideBtn = document.createElement("button");
+        slideBtn.className = "edit-button";
+        slideBtn.innerText = "Slide";
+        rightTd.appendChild(slideBtn);
+      } else if (row === 5) {
+        const fadeBtn = document.createElement("button");
+        fadeBtn.className = "edit-button";
+        fadeBtn.innerText = "Fade";
+        rightTd.appendChild(fadeBtn);
+      }
+      tr.appendChild(rightTd);
+
+      grid.appendChild(tr);
+    });
+
+    const editPanel = document.getElementById("editPanel");
+    const editTitle = document.getElementById("editTitle");
+    const editGrid = document.getElementById("editGrid");
+
+    function openEditPanel(ptzName) {
+      editTitle.innerText = ptzName + " - Edit Mode";
+      editGrid.innerHTML = "";
+      for (let i = 0; i < 12; i++) {
+        const b = document.createElement("button");
+        b.innerText = "Btn " + (i + 1);
+        editGrid.appendChild(b);
+      }
+      editPanel.style.display = "block";
+      setTimeout(() => editPanel.classList.add("open"), 10);
+    }
+
+    function closeEditPanel() {
+      editPanel.classList.remove("open");
+      setTimeout(() => { editPanel.style.display = "none"; }, 400);
+    }
+
+    function openGoLiveModal() {
+      document.getElementById("goLiveModal").style.display = "flex";
+    }
+
+    function closeGoLiveModal() {
+      document.getElementById("goLiveModal").style.display = "none";
+    }
+
+    function confirmGoLive() {
+      alert("Yes clicked! (configure later)");
+      closeGoLiveModal();
+    }
+
+    let ws;
+    function connectWebSocket() {
+      ws = new WebSocket(companionHost);
+      ws.onopen = () => console.log("Connected to Companion");
+      ws.onmessage = (msg) => {
+        const data = JSON.parse(msg.data);
+        if (data.type === "bank_update") updateButton(data);
+      };
+      ws.onclose = () => { console.log("WebSocket closed, retrying..."); setTimeout(connectWebSocket, 3000); };
+    }
+    connectWebSocket();
+
+    function pressButton(page, bank) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: "bank-press", page, bank }));
+        ws.send(JSON.stringify({ action: "bank-release", page, bank }));
+      }
+    }
+
+    function updateButton(data) {
+      const selector = `.button[data-page="${data.page}"][data-bank="${data.bank}"]`;
+      const btn = document.querySelector(selector);
+      if (btn) {
+        if (data.text) btn.innerText = data.text;
+        if (data.style && data.style.bgcolor) btn.style.background = data.style.bgcolor;
+        if (data.style && data.style.color) btn.style.color = data.style.color;
+      }
+    }
+  </script>
+</body>
+</html>
